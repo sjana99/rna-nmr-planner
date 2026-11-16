@@ -1,0 +1,189 @@
+<meta charset="utf-8">
+<title>RNA NMR Planner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+<style>
+/* Layout: sample strip on top, then experiment list (left, sticky) beside one experiment sheet (right). */
+:root {
+  --bg: #f3f5f7; --surf: #ffffff; --sunk: #e9edf1; --ink: #17222c; --ink2: #4a5966; --ink3: #7b8894; --line: #d5dce3;
+  --acc: #0b6e8a; --acc-soft: #dff0f5; --path: #c2255c; --path-soft: #fbe3ec;
+  --nH: #1c6fbf; --nC: #2a7f3b; --nN: #6741d9; --nP: #d9580b;
+  --ok: #2f8f46; --warn: #c77700; --bad: #c5302c; --info: #6b7a88;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; --cond: "IBM Plex Sans Condensed", "IBM Plex Sans", "Arial Narrow", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e1419; --surf: #161e26; --sunk: #1e2832; --ink: #e5ebf0; --ink2: #aab6c1; --ink3: #7c8996; --line: #2c3945;
+  --acc: #5cc3de; --acc-soft: #153843; --path: #ff7fab; --path-soft: #47202f;
+  --nH: #74b9f5; --nC: #6fd083; --nN: #b09afc; --nP: #ffa55c;
+  --ok: #57c26f; --warn: #f0a93a; --bad: #ff7a73; --info: #8b99a6; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0e1419; --surf: #161e26; --sunk: #1e2832; --ink: #e5ebf0; --ink2: #aab6c1; --ink3: #7c8996; --line: #2c3945;
+  --acc: #5cc3de; --acc-soft: #153843; --path: #ff7fab; --path-soft: #47202f;
+  --nH: #74b9f5; --nC: #6fd083; --nN: #b09afc; --nP: #ffa55c;
+  --ok: #57c26f; --warn: #f0a93a; --bad: #ff7a73; --info: #8b99a6; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); }
+.wrap { max-width: 1600px; margin: 0 auto; padding-block: 28px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 20px }
+h1 { font: 600 30px/1.1 var(--cond); margin: 0; letter-spacing: .01em }
+h2 { font: 600 24px/1.2 var(--cond); margin: 0; text-wrap: balance }
+h3 { font: 600 11.5px/1 var(--sans); letter-spacing: .09em; text-transform: uppercase; color: var(--ink3); margin: 0 }
+h4 { font: 600 13px/1.2 var(--sans); margin: 18px 0 8px; color: var(--ink2) }
+p { margin: 0 } code { font: 500 13px var(--mono) } a { color: var(--acc) }
+.muted { color: var(--ink3) } .small { font-size: 12.5px }
+.top p { color: var(--ink2); max-width: 70ch; margin-top: 6px }
+.panel { background: var(--surf); border: 1px solid var(--line); border-radius: 10px }
+/* sample strip */
+.sample { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 14px }
+.fields label, .k { display: block; font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink3); font-weight: 500 }
+select, input[type=number] { width: 100%; margin-top: 4px; padding: 7px 9px; font: 14px var(--sans); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; font-variant-numeric: tabular-nums }
+select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px }
+.sum { display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 13px; color: var(--ink2); border-top: 1px solid var(--line); padding-top: 12px }
+.sum b { color: var(--ink); font-variant-numeric: tabular-nums }
+/* goals */
+.goals { display: flex; flex-wrap: wrap; gap: 6px }
+.chip { font: 500 13px var(--sans); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surf); color: var(--ink2); cursor: pointer }
+.chip:hover { border-color: var(--acc) } .chip.on { background: var(--acc); border-color: var(--acc); color: var(--surf) }
+/* main grid */
+.main { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 20px; align-items: start }
+.side { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); max-height: calc(100vh - 24px); display: flex; flex-direction: column; overflow: hidden }
+.sidehead { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; color: var(--ink2) }
+.sidehead label { display: flex; gap: 6px; align-items: center; cursor: pointer }
+.list { overflow-y: auto; padding: 6px 8px 10px } .list h3 { padding: 14px 8px 6px }
+.row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 7px 8px; border: 0; border-radius: 7px; background: none; color: var(--ink); font: 14px/1.3 var(--sans); cursor: pointer }
+.row:hover { background: var(--sunk) } .row.on { background: var(--acc-soft); box-shadow: inset 3px 0 0 var(--acc) }
+.rn { flex: 1; min-width: 0 } .rn small { display: block; color: var(--ink3); font-size: 12px }
+.tag { font: 500 11px var(--mono); color: var(--ink2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; white-space: nowrap }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex: none; background: var(--info) }
+.dot.ok { background: var(--ok) } .dot.warn { background: var(--warn) } .dot.bad { background: var(--bad) }
+.empty { padding: 16px 8px; color: var(--ink3) }
+/* detail */
+.detail { display: flex; flex-direction: column; gap: 16px; min-width: 0 }
+.sec { padding: 20px 22px; min-width: 0 }
+.sec > h3 { margin-bottom: 14px }
+.dh-top { display: flex; gap: 10px; align-items: center; margin-bottom: 10px }
+.status { font: 600 12px var(--sans); padding: 3px 10px; border-radius: 999px; color: var(--surf) }
+.status.ok { background: var(--ok) } .status.warn { background: var(--warn) } .status.bad { background: var(--bad) }
+.lede { color: var(--ink2); max-width: 72ch; margin-top: 8px }
+.ids { display: flex; flex-wrap: wrap; gap: 10px 28px; margin: 16px 0 0 } .ids dt { font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink3) } .ids dd { margin: 2px 0 0 }
+.checks { list-style: none; margin: 16px 0 0; padding: 14px 0 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px }
+.checks li { display: flex; gap: 10px; align-items: baseline; font-size: 14px; color: var(--ink2); max-width: 80ch } .checks .dot { transform: translateY(-1px) }
+.checks li.bad { color: var(--ink) }
+/* pathway */
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px }
+.tab { font: 500 13px var(--sans); padding: 6px 12px; border: 1px solid var(--line); background: var(--surf); color: var(--ink2); border-radius: 6px; cursor: pointer }
+.tab.on { background: var(--ink); color: var(--surf); border-color: var(--ink) }
+.chain { font-size: 13.5px; line-height: 1.9; color: var(--ink2); background: var(--sunk); border-radius: 8px; padding: 8px 12px }
+.chain b { color: var(--ink); font-weight: 600 } .chain i { font: 500 12px var(--mono); color: var(--acc); font-style: normal } .chain .arr { color: var(--path); font-size: 12.5px }
+.pathgrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 14px; container-type: inline-size } .pathgrid > figure { margin: 0; min-width: 0 }
+@media (min-width: 1500px) { .pathgrid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); align-items: start } }
+.seq { display: block; margin: 0 auto; max-width: none } .q-a { stroke: var(--ink3); stroke-width: 1 } .q-p { fill: var(--ink) } .q-b { fill: var(--sunk); stroke: var(--ink2); stroke-width: 1 } .q-bt { font: 500 8.5px var(--sans); fill: var(--ink); text-anchor: middle } .q-l { font: 500 10px var(--mono); fill: var(--ink2); text-anchor: middle } .q-t { stroke: var(--acc); stroke-width: 2 } .q-f { fill: none; stroke: var(--ink); stroke-width: 1.2 } .q-ch { font: 600 11px var(--mono) } .q-ch.nH { fill: var(--nH) } .q-ch.nC { fill: var(--nC) } .q-ch.nN { fill: var(--nN) } .q-ch.nP { fill: var(--nP) } .q-n { stroke: var(--path); stroke-width: 1 } .q-c { fill: var(--surf); stroke: var(--path); stroke-width: 1.3 } .q-ct { font: 600 9px var(--sans); fill: var(--path); text-anchor: middle } .q-g.wait { opacity: .18 } .q-g.past { opacity: .55 } .q-g.cur .q-c { fill: var(--path) } .q-g.cur .q-ct { fill: var(--surf) }
+.q-s { fill: var(--acc-soft); stroke: var(--acc); stroke-width: 1.2 } .q-ph { font: 600 9.5px var(--mono); fill: var(--path); text-anchor: middle } .q-gr { fill: var(--sunk); stroke: var(--ink2); stroke-width: 1 } .q-gl { font: 500 9px var(--mono); fill: var(--bad); text-anchor: middle } .q-ch.nG { fill: var(--ink2) } .seqtabs { margin-bottom: 8px } .q-g.cur .q-p { fill: var(--path) }
+.catbox { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px } .catbox p { margin: 4px 0 6px } .catbox table.par { min-width: 0 }
+.molfig { margin: 0 } .molwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surf); padding: 4px }
+.mol { display: block; margin: 0 auto; max-width: none }
+figcaption { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; color: var(--ink3); margin-top: 8px }
+.lg { display: inline-flex; align-items: center; gap: 6px } .lg i { width: 26px; height: 0; border-top: 2.2px solid var(--path) }
+.lg .l-noe { border-top-style: dashed } .lg .l-toc { border-top: 4px double var(--path) } .lg .l-ex { border-top-style: dotted } .lg .l-hb { border-top: 1.4px dashed var(--ink3) }
+.m-bd { stroke: var(--ink3); stroke-width: 1.2; fill: none } .m-hb { stroke: var(--ink3); stroke-width: 1.1; stroke-dasharray: 2 4; fill: none }
+.m-at { font: 500 10px var(--sans); text-anchor: middle; fill: var(--ink2) } .m-at.eH { fill: var(--ink3) } .m-at.eO { fill: var(--ink3) }
+.m-mask { fill: var(--surf) } .m-on { fill: var(--surf); font-weight: 600 } .m-on.wait { fill: var(--ink2) }
+.m-nd.nH { fill: var(--nH) } .m-nd.nC { fill: var(--nC) } .m-nd.nN { fill: var(--nN) } .m-nd.nP { fill: var(--nP) } .m-nd.wait { fill: var(--sunk); stroke: var(--line); stroke-width: 1 }
+.m-cur { fill: var(--path-soft); stroke: var(--path); stroke-width: 1.5 }
+.m-box { fill: var(--sunk); stroke: var(--line); stroke-width: 1 } .m-box.on { stroke: var(--nH); stroke-width: 1.6 } .m-boxt { fill: var(--ink); font-size: 10.5px }
+.m-tag { font-family: var(--cond); text-anchor: middle; fill: var(--ink3) } .m-big { font-size: 22px; font-weight: 600; opacity: .28; dominant-baseline: middle } .m-end { font-size: 12px; font-family: var(--mono) } .m-res { font-size: 11px; text-anchor: start; letter-spacing: .06em; text-transform: uppercase }
+.m-ar path { fill: none; stroke: var(--path); stroke-width: 2.2; stroke-linecap: round } .m-ar polygon { fill: var(--path); stroke: none }
+.m-ar.kNOE path, .m-ar.kROE path { stroke-dasharray: 5 4 } .m-ar.kEX path { stroke-dasharray: 1 5 } .m-ar.kTOC path, .m-ar.kCP path { stroke-dasharray: 9 3 2 3 }
+.m-ar.cur path { stroke-width: 3.4 } .m-ar.wait, .m-bg.wait, .m-ev.wait { opacity: .16 } .m-ar.past, .m-bg.past, .m-ev.past { opacity: .5 }
+.m-bg circle { fill: var(--surf); stroke: var(--path); stroke-width: 1.3 } .m-bg text { font: 600 9px var(--sans); text-anchor: middle; fill: var(--path) }
+.m-ev circle { fill: var(--acc); stroke: var(--surf); stroke-width: 1.5 } .mk { width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 1.3px solid var(--ink3); background: var(--surf) } .mk-e { background: var(--acc); border-color: var(--acc) } .mk-d { background: var(--ink); border-color: var(--ink) } .m-ev text { font: 600 9px var(--sans); fill: var(--surf) }
+.m-ev.tdet circle { fill: var(--ink) } .m-ev.tself circle, .m-ev.tstart circle { fill: var(--surf); stroke: var(--ink3); stroke-width: 1.3 } .m-ev.tself text, .m-ev.tstart text { fill: var(--ink) }
+.stepper { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0 10px }
+.stepper button, #reset { font: 500 13px var(--sans); padding: 7px 13px; border-radius: 6px; border: 1px solid var(--line); background: var(--surf); color: var(--ink); cursor: pointer }
+.stepper button.pri { background: var(--path); border-color: var(--path); color: var(--surf) } .stepper button:disabled { opacity: .45; cursor: default }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px }
+.steps button { display: flex; gap: 12px; width: 100%; text-align: left; background: none; border: 0; border-radius: 8px; padding: 9px 10px; color: var(--ink2); font: 14px/1.5 var(--sans); cursor: pointer }
+.steps button:hover { background: var(--sunk) } .steps li.on button { background: var(--path-soft); color: var(--ink) }
+.sn { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1.3px solid var(--path); color: var(--path); font: 600 11.5px/20px var(--sans); text-align: center; margin-top: 1px }
+.st { min-width: 0; max-width: 78ch } .st b { display: block; color: var(--ink); font-weight: 600 }
+.mech { display: block; font: 500 12px var(--mono); color: var(--path); margin: 1px 0 2px }
+.ends { margin-top: 16px; padding: 14px 16px; border-radius: 8px; background: var(--ink); color: var(--surf) } .ends .k { color: var(--surf); opacity: .7 } .ends p { margin-top: 4px; max-width: 78ch }
+/* setup */
+.dims { display: flex; flex-direction: column; gap: 14px }
+.dim { border: 1px solid var(--line); border-radius: 8px; padding: 14px; min-width: 0 }
+.dimhead { display: flex; gap: 10px; align-items: baseline; margin-bottom: 10px }
+.nuc { font: 600 12px var(--mono); padding: 2px 8px; border-radius: 4px; color: var(--surf) } .nuc.nH { background: var(--nH) } .nuc.nC { background: var(--nC) } .nuc.nN { background: var(--nN) } .nuc.nP { background: var(--nP) } .nuc.nD { background: var(--ink3) }
+.dimgrid, .scan { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px 16px; align-items: end }
+.scan { margin-top: 16px; padding: 14px; border-radius: 8px; background: var(--sunk) }
+.num { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0 } .num input { margin-top: 4px } .num span { font-size: 12.5px; color: var(--ink3); white-space: nowrap; margin-top: 4px }
+.v { display: block; margin-top: 4px; padding: 7px 0; font-variant-numeric: tabular-nums; font-weight: 500 }
+.total .big { display: block; font: 600 24px/1.2 var(--cond); font-variant-numeric: tabular-nums }
+.win { display: block; width: 100%; max-width: 560px; height: auto; margin-top: 12px }
+.w-win { fill: var(--acc-soft); stroke: var(--acc); stroke-width: 1 } .w-ax { stroke: var(--ink3); stroke-width: 1 } .w-wat { stroke: var(--bad); stroke-width: 1; stroke-dasharray: 2 2 }
+.w-reg.nH { fill: var(--nH) } .w-reg.nC { fill: var(--nC) } .w-reg.nN { fill: var(--nN) } .w-reg.nP { fill: var(--nP) } .w-reg.out { opacity: .4 }
+.w-lab { font: 500 10px var(--sans); fill: var(--ink2); text-anchor: middle } .w-lab.out { fill: var(--warn) } .w-tick { font: 10px var(--mono); fill: var(--ink3) }
+.fold { color: var(--warn); font-size: 13px; margin-top: 6px } .note { margin-top: 12px; font-size: 13px; color: var(--ink2); border-left: 2px solid var(--warn); padding-left: 10px; max-width: 80ch }
+.sechead { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px } .sechead h3 { margin: 0 }
+.scroll { overflow-x: auto }
+table.par { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 420px }
+.par th, .par td { text-align: left; vertical-align: top; padding: 7px 10px 7px 0; border-top: 1px solid var(--line); font-weight: 400; color: var(--ink2) }
+.par th { white-space: nowrap; color: var(--ink) } .par .val { white-space: nowrap; color: var(--ink); font-variant-numeric: tabular-nums }
+.plain, .limits { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; color: var(--ink2); max-width: 80ch }
+.limits li::marker { color: var(--warn) }
+.src { font-size: 12.5px; color: var(--ink3); max-width: 90ch }
+@media (max-width: 900px) { .main { grid-template-columns: minmax(0, 1fr) } .side { position: static; max-height: 360px } .sec { padding: 16px } h1 { font-size: 26px } }
+@media (prefers-reduced-motion: no-preference) { .m-ar, .m-bg, .m-ev, .m-nd { transition: opacity .25s } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>RNA NMR Planner</h1>
+    <p>Describe your sample and spectrometer, pick what you want to learn, and get the Bruker parameter set, the numbers for your field, the limits of the method and a step-by-step map of where the magnetization goes.</p>
+  </header>
+
+  <section class="panel sample" aria-label="Sample and spectrometer">
+    <h3>Your sample and spectrometer</h3>
+    <div class="fields">
+      <label>Labeling<select id="lab"><option value="nat">Unlabeled</option><option value="N">Uniform ¹⁵N</option><option value="CN">Uniform ¹³C, ¹⁵N</option><option value="selN">Selective ¹⁵N</option><option value="selCN">Selective ¹³C, ¹⁵N</option></select></label>
+      <label>Solvent<select id="solv"><option value="H2O">90 % H₂O / 10 % D₂O</option><option value="D2O">100 % D₂O</option></select></label>
+      <label>Size (nt)<input id="nt" type="number" min="2" max="400" step="1"></label>
+      <label>Concentration (mM)<input id="conc" type="number" min="0.01" step="0.05"></label>
+      <label>Temperature (K)<input id="temp" type="number" min="273" max="333" step="1"></label>
+      <label>Field (¹H MHz)<select id="field"><option>400</option><option>500</option><option>600</option><option>700</option><option>800</option><option>900</option><option>950</option><option>1000</option><option>1200</option></select></label>
+      <label>Probe<select id="probe"><option value="tci">TCI CryoProbe (H/C/N)</option><option value="qci">QCI-P CryoProbe (H/C/N/P)</option><option value="txo">TXO CryoProbe (C/N inner)</option><option value="txi">Room-temp. TXI (H/C/N)</option><option value="bbo">Room-temp. broadband</option></select></label>
+    </div>
+    <div class="sum" id="sum"></div>
+  </section>
+
+  <section aria-label="Goal">
+    <h3 style="margin-bottom:10px">What do you want to learn?</h3>
+    <div class="goals" id="goals"></div>
+  </section>
+
+  <div class="main">
+    <aside class="panel side" aria-label="Experiments">
+      <div class="sidehead"><span id="count"></span><label><input type="checkbox" id="hide"> Hide what cannot run</label></div>
+      <div class="list" id="list"></div>
+    </aside>
+
+    <div class="detail" id="detail">
+      <section class="panel sec"><div id="d-head"></div><ul class="checks" id="checks"></ul></section>
+      <section class="panel sec"><h3>Magnetization transfer</h3><div id="path"></div></section>
+      <section class="panel sec"><div class="sechead"><h3>Acquisition setup</h3><button type="button" id="reset">Reset to Bruker values</button></div><div id="setup"></div><div id="params"></div></section>
+      <section class="panel sec"><h3>Problems and limits</h3><ul class="limits" id="limits"></ul></section>
+      <p class="src" id="src"></p>
+    </div>
+  </div>
+</div>
+
+<script charset="utf-8" src="mol.js"></script>
+<script charset="utf-8" src="data-a.js"></script>
+<script charset="utf-8" src="data-b.js"></script>
+<script charset="utf-8" src="data-c.js"></script>
+<script charset="utf-8" src="data-d.js"></script>
+<script charset="utf-8" src="data-e.js"></script>
+<script charset="utf-8" src="data-f.js"></script>
+<script charset="utf-8" src="data-g.js"></script>
+<script charset="utf-8" src="seq.js"></script>
+<script charset="utf-8" src="app.js"></script>
